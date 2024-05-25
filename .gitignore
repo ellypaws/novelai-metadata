@@ -1,0 +1,13 @@
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+*.sqlite
+*.png
+*.json
+*.ps1
+.idea/
+out/
