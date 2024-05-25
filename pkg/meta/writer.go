@@ -71,7 +71,7 @@ func (e *LSBExtractor) read32BitInteger() int {
 	return int(binary.BigEndian.Uint32(bytesList))
 }
 
-func ExtractMetadata(imgFile *os.File) (map[string]interface{}, error) {
+func ExtractMetadata(imgFile *os.File) (*Metadata, error) {
 	img, _, err := image.Decode(imgFile)
 	if err != nil {
 		return nil, err
@@ -98,19 +98,21 @@ func ExtractMetadata(imgFile *os.File) (map[string]interface{}, error) {
 		return nil, err
 	}
 
-	var metaData map[string]interface{}
-	err = json.Unmarshal(decompressedData, &metaData)
+	var metadata struct {
+		Metadata
+		CommentString *string `json:"Comment,omitempty"`
+	}
+	err = json.Unmarshal(decompressedData, &metadata)
 	if err != nil {
 		return nil, err
 	}
 
-	if comment, exists := metaData["Comment"]; exists {
-		var commentData map[string]interface{}
-		err = json.Unmarshal([]byte(comment.(string)), &commentData)
-		if err == nil {
-			metaData["Comment"] = commentData
+	if metadata.CommentString != nil {
+		err = json.Unmarshal([]byte(*metadata.CommentString), &metadata.Metadata.Comment)
+		if err != nil {
+			return nil, err
 		}
 	}
 
-	return metaData, nil
+	return &metadata.Metadata, nil
 }
