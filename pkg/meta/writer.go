@@ -8,7 +8,6 @@ import (
 	"image"
 	_ "image/png"
 	"io"
-	"os"
 	"strings"
 )
 
@@ -71,8 +70,8 @@ func (e *LSBExtractor) read32BitInteger() int {
 	return int(binary.BigEndian.Uint32(bytesList))
 }
 
-func ExtractMetadata(imgFile *os.File) (*Metadata, error) {
-	img, _, err := image.Decode(imgFile)
+func ExtractMetadata(r io.Reader) (*Metadata, error) {
+	img, _, err := image.Decode(r)
 	if err != nil {
 		return nil, err
 	}
