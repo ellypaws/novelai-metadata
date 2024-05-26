@@ -29,8 +29,7 @@ func getPathsFromArgsOrPrompt() []string {
 func processPath(p string) error {
 	info, err := os.Stat(p)
 	if err != nil {
-		log.Printf("Error stating path %s: %v", p, err)
-		return err
+		return fmt.Errorf("failed to stat path %s: %v", p, err)
 	}
 
 	if info.IsDir() {
@@ -39,7 +38,6 @@ func processPath(p string) error {
 		return processFile(p)
 	}
 
-	log.Printf("Skipping non-PNG file: %s", p)
 	return nil
 }
 
@@ -63,24 +61,29 @@ func processDirectory(dirPath string) error {
 }
 
 func processFile(filePath string) error {
-	log.Printf("Opening file: %s", filePath)
 	imgFile, err := os.Open(filePath)
 	if err != nil {
-		log.Printf("Failed to open file %s: %v", filePath, err)
-		return err
+		return fmt.Errorf("failed to open file %s: %v", filePath, err)
 	}
 	defer imgFile.Close()
 
 	data, err := meta.ExtractMetadata(imgFile)
 	if err != nil {
-		log.Printf("Failed to extract metadata from %s: %v", filePath, err)
-		return err
+		return fmt.Errorf("failed to extract metadata from file: %w", err)
+	}
+
+	valid, err := meta.IsNovelAI(*data)
+	if err != nil {
+		return fmt.Errorf("failed to verify metadata for file: %w", err)
+	}
+	if !valid {
+		log.Printf("Warning: Invalid signature for %s", filePath)
+		return nil
 	}
 
 	bin, err := json.MarshalIndent(data, "", "  ")
 	if err != nil {
-		log.Printf("Failed to marshal json for file %s: %v", filePath, err)
-		return err
+		return fmt.Errorf("failed to marshal metadata to JSON: %w", err)
 	}
 
 	jsonName := path.Join(path.Dir(filePath), fmt.Sprintf("%s.json", strings.TrimSuffix(path.Base(filePath), path.Ext(filePath))))
@@ -88,7 +91,6 @@ func processFile(filePath string) error {
 }
 
 func saveFile(filePath string, data []byte) error {
-	log.Printf("Writing metadata to file: %s", filePath)
 	jsonFile, err := os.Create(filePath)
 	if err != nil {
 		log.Fatalf("Failed to create file %s: %v", filePath, err)

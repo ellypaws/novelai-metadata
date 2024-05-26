@@ -112,6 +112,10 @@ func ExtractMetadata(imgFile *os.File) (*Metadata, error) {
 		if err != nil {
 			return nil, err
 		}
+		metadata.raw = &raw{
+			comment: metadata.CommentString,
+			image:   img,
+		}
 	}
 
 	return &metadata.Metadata, nil
