@@ -8,6 +8,7 @@
 *.sqlite
 *.png
 *.json
+*.txt
 *.ps1
 .idea/
 out/

@@ -113,8 +113,12 @@ func processFile(filePath string) (*meta.Metadata, error) {
 
 type save func(path string, metadata *meta.Metadata) error
 
+func replaceExtension(path, ext string) string {
+	return filepath.Join(filepath.Dir(path), fmt.Sprintf("%s%s", strings.TrimSuffix(filepath.Base(path), filepath.Ext(path)), ext))
+}
+
 func saveJSON(path string, metadata *meta.Metadata) error {
-	jsonName := filepath.Join(filepath.Dir(path), fmt.Sprintf("%s.json", strings.TrimSuffix(filepath.Base(path), filepath.Ext(path))))
+	jsonName := replaceExtension(path, ".json")
 	jsonFile, err := os.Create(jsonName)
 	if err != nil {
 		log.Fatalf("Failed to create file %s: %v", jsonName, err)
@@ -133,5 +137,32 @@ func saveJSON(path string, metadata *meta.Metadata) error {
 	}
 
 	log.Printf("Saved %s", jsonName)
+	return nil
+}
+
+func saveCaption(path string, metadata *meta.Metadata) error {
+	if metadata.Comment == nil {
+		return nil
+	}
+	captionName := replaceExtension(path, ".txt")
+	captionFile, err := os.Create(captionName)
+	if err != nil {
+		log.Fatalf("Failed to create file %s: %v", captionName, err)
+		return err
+	}
+	defer captionFile.Close()
+
+	prompt := strings.ReplaceAll(metadata.Comment.Prompt, "{", "")
+	prompt = strings.ReplaceAll(prompt, "}", "")
+	prompt = strings.ReplaceAll(prompt, "[", "")
+	prompt = strings.ReplaceAll(prompt, "]", "")
+	prompt = strings.TrimSpace(prompt)
+
+	_, err = captionFile.WriteString(prompt)
+	if err != nil {
+		return fmt.Errorf("failed to write caption to file: %w", err)
+	}
+
+	log.Printf("Saved %s", captionName)
 	return nil
 }
