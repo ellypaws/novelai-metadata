@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"encoding/json"
 	"fmt"
 	"log"
 	"nai-metadata/pkg/meta"
@@ -31,14 +32,16 @@ type data struct {
 	out   map[string]*meta.Metadata
 	mutex *sync.Mutex
 	wait  *sync.WaitGroup
+	save  save
 }
 
-func processPath(p string) (map[string]*meta.Metadata, error) {
+func processPath(p string, save save) (map[string]*meta.Metadata, error) {
 	var out = make(map[string]*meta.Metadata)
 	data := data{
 		out:   out,
 		mutex: new(sync.Mutex),
 		wait:  new(sync.WaitGroup),
+		save:  save,
 	}
 	_ = filepath.Walk(p, processWalk(data))
 	data.wait.Wait()
@@ -63,12 +66,22 @@ func processWalk(data data) func(path string, info os.FileInfo, err error) error
 				log.Printf("Failed to process file %s: %v", path, err)
 				return
 			}
-			if metadata != nil {
+			if metadata == nil {
+				return
+			}
+			if data.out != nil {
 				data.mutex.Lock()
 				data.out[path] = metadata
 				data.mutex.Unlock()
-				log.Printf("Done: %v", time.Since(now))
 			}
+			if data.save != nil {
+				err := data.save(path, metadata)
+				if err != nil {
+					log.Printf("Failed to save metadata for file %s: %v", path, err)
+					return
+				}
+			}
+			log.Printf("Done: %v", time.Since(now))
 		}()
 		return nil
 	}
@@ -98,20 +111,27 @@ func processFile(filePath string) (*meta.Metadata, error) {
 	return data, nil
 }
 
-func saveFile(filePath string, data []byte) error {
-	jsonFile, err := os.Create(filePath)
+type save func(path string, metadata *meta.Metadata) error
+
+func saveJSON(path string, metadata *meta.Metadata) error {
+	jsonName := filepath.Join(filepath.Dir(path), fmt.Sprintf("%s.json", strings.TrimSuffix(filepath.Base(path), filepath.Ext(path))))
+	jsonFile, err := os.Create(jsonName)
 	if err != nil {
-		log.Fatalf("Failed to create file %s: %v", filePath, err)
+		log.Fatalf("Failed to create file %s: %v", jsonName, err)
 		return err
 	}
 	defer jsonFile.Close()
 
-	_, err = jsonFile.Write(data)
+	bin, err := json.Marshal(metadata)
 	if err != nil {
-		log.Fatalf("Failed to write to file %s: %v", filePath, err)
-		return err
+		return fmt.Errorf("failed to marshal metadata: %w", err)
 	}
 
-	log.Printf("Successfully wrote to file: %s", filePath)
+	_, err = jsonFile.Write(bin)
+	if err != nil {
+		return fmt.Errorf("failed to write metadata to file: %w", err)
+	}
+
+	log.Printf("Saved %s", jsonName)
 	return nil
 }

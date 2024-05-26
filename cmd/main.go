@@ -11,7 +11,7 @@ func main() {
 	now := time.Now()
 	for _, p := range paths {
 		log.Printf("Processing path: %s", p)
-		_, err := processPath(p)
+		_, err := processPath(p, saveJSON)
 		if err != nil {
 			log.Printf("Failed to process path %s: %v", p, err)
 		}
