@@ -66,7 +66,8 @@ func rgbaImageBytes(rgbaImg *image.NRGBA) []byte {
 	rgbBytes := make([]byte, 0, 3*rgbaImg.Rect.Dx()*rgbaImg.Rect.Dy())
 	for y := rgbaImg.Rect.Min.Y; y < rgbaImg.Rect.Max.Y; y++ {
 		for x := rgbaImg.Rect.Min.X; x < rgbaImg.Rect.Max.X; x++ {
-			pix := rgbaImg.Pix[(y-rgbaImg.Rect.Min.Y)*rgbaImg.Stride+(x-rgbaImg.Rect.Min.X)*4 : (y-rgbaImg.Rect.Min.Y)*rgbaImg.Stride+(x-rgbaImg.Rect.Min.X)*4+4]
+			stride := (y-rgbaImg.Rect.Min.Y)*rgbaImg.Stride + (x-rgbaImg.Rect.Min.X)*4
+			pix := rgbaImg.Pix[stride : stride+4]
 			rgbBytes = append(rgbBytes, pix[0], pix[1], pix[2])
 		}
 	}
