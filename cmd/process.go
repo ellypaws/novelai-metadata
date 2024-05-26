@@ -2,13 +2,14 @@ package main
 
 import (
 	"bufio"
-	"encoding/json"
 	"fmt"
 	"log"
 	"nai-metadata/pkg/meta"
 	"os"
-	"path"
+	"path/filepath"
 	"strings"
+	"sync"
+	"time"
 )
 
 func getPathsFromArgsOrPrompt() []string {
@@ -26,68 +27,75 @@ func getPathsFromArgsOrPrompt() []string {
 	return os.Args[1:]
 }
 
-func processPath(p string) error {
-	info, err := os.Stat(p)
-	if err != nil {
-		return fmt.Errorf("failed to stat path %s: %v", p, err)
-	}
-
-	if info.IsDir() {
-		return processDirectory(p)
-	} else if path.Ext(info.Name()) == ".png" {
-		return processFile(p)
-	}
-
-	return nil
+type data struct {
+	out   map[string]*meta.Metadata
+	mutex *sync.Mutex
+	wait  *sync.WaitGroup
 }
 
-func processDirectory(dirPath string) error {
-	log.Printf("Entering directory: %s", dirPath)
-	entries, err := os.ReadDir(dirPath)
-	if err != nil {
-		log.Printf("Failed to read directory %s: %v", dirPath, err)
-		return err
+func processPath(p string) (map[string]*meta.Metadata, error) {
+	var out = make(map[string]*meta.Metadata)
+	data := data{
+		out:   out,
+		mutex: new(sync.Mutex),
+		wait:  new(sync.WaitGroup),
 	}
+	_ = filepath.Walk(p, processWalk(data))
+	data.wait.Wait()
 
-	for _, entry := range entries {
-		entryPath := path.Join(dirPath, entry.Name())
-		err := processPath(entryPath)
-		if err != nil {
-			log.Printf("Failed to process entry %s: %v", entryPath, err)
+	return out, nil
+}
+
+func processWalk(data data) func(path string, info os.FileInfo, err error) error {
+	return func(path string, info os.FileInfo, err error) error {
+		if info.IsDir() {
+			return nil
 		}
+		if filepath.Ext(path) != ".png" {
+			return nil
+		}
+		data.wait.Add(1)
+		go func() {
+			defer data.wait.Done()
+			now := time.Now()
+			metadata, err := processFile(path)
+			if err != nil {
+				log.Printf("Failed to process file %s: %v", path, err)
+				return
+			}
+			if metadata != nil {
+				data.mutex.Lock()
+				data.out[path] = metadata
+				data.mutex.Unlock()
+				log.Printf("Done: %v", time.Since(now))
+			}
+		}()
+		return nil
 	}
-
-	return nil
 }
 
-func processFile(filePath string) error {
+func processFile(filePath string) (*meta.Metadata, error) {
 	imgFile, err := os.Open(filePath)
 	if err != nil {
-		return fmt.Errorf("failed to open file %s: %v", filePath, err)
+		return nil, fmt.Errorf("failed to open file %s: %v", filePath, err)
 	}
 	defer imgFile.Close()
 
 	data, err := meta.ExtractMetadata(imgFile)
 	if err != nil {
-		return fmt.Errorf("failed to extract metadata from file: %w", err)
+		return nil, fmt.Errorf("failed to extract metadata from file: %w", err)
 	}
 
 	valid, err := meta.IsNovelAI(*data)
 	if err != nil {
-		return fmt.Errorf("failed to verify metadata for file: %w", err)
+		return nil, fmt.Errorf("failed to verify metadata for file: %w", err)
 	}
 	if !valid {
 		log.Printf("Warning: Invalid signature for %s", filePath)
-		return nil
+		return nil, nil
 	}
 
-	bin, err := json.MarshalIndent(data, "", "  ")
-	if err != nil {
-		return fmt.Errorf("failed to marshal metadata to JSON: %w", err)
-	}
-
-	jsonName := path.Join(path.Dir(filePath), fmt.Sprintf("%s.json", strings.TrimSuffix(path.Base(filePath), path.Ext(filePath))))
-	return saveFile(jsonName, bin)
+	return data, nil
 }
 
 func saveFile(filePath string, data []byte) error {
