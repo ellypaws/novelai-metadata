@@ -5,12 +5,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
-	"nai-metadata/pkg/meta"
 	"os"
 	"path/filepath"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/ellypaws/novelai-metadata/pkg/meta"
 )
 
 func getPathsFromArgsOrPrompt() []string {
