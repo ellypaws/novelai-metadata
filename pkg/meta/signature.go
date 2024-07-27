@@ -8,9 +8,23 @@ import (
 	"fmt"
 	"image"
 	"strings"
+	"sync"
 )
 
 const VerifyKeyHex = "Y2JcQAOhLwzwSDUJPNgL04nS0Tbqm7cSRc4xk0vRMic="
+
+var (
+	verifyKey []byte
+	once      sync.Once
+)
+
+func initVerifyKey() {
+	var err error
+	verifyKey, err = base64.StdEncoding.DecodeString(VerifyKeyHex)
+	if err != nil {
+		panic(fmt.Sprintf("failed to decode verify key: %v", err))
+	}
+}
 
 func (metadata *Metadata) IsNovelAI() (bool, error) {
 	if metadata.Comment == nil {
@@ -30,10 +44,7 @@ func (metadata *Metadata) IsNovelAI() (bool, error) {
 		return false, fmt.Errorf("failed to decode signed_hash: %w", err)
 	}
 
-	verifyKey, err := base64.StdEncoding.DecodeString(VerifyKeyHex)
-	if err != nil {
-		return false, fmt.Errorf("failed to decode verify key: %w", err)
-	}
+	once.Do(initVerifyKey)
 
 	removeSignedHashField(metadata.raw.comment)
 
