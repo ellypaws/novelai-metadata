@@ -33,7 +33,7 @@ func NewLSBExtractor(img image.Image) *LSBExtractor {
 	return &LSBExtractor{data: data, rows: rows, cols: cols}
 }
 
-func (e *LSBExtractor) extractNextBit() {
+func (e *LSBExtractor) extractNextBit() bool {
 	if e.row < e.rows && e.col < e.cols {
 		bit := e.data[e.row][e.col][3] & 1
 		e.bits++
@@ -44,30 +44,37 @@ func (e *LSBExtractor) extractNextBit() {
 			e.row = 0
 			e.col++
 		}
+		return true
 	}
+	return false
 }
 
-func (e *LSBExtractor) getOneByte() byte {
+func (e *LSBExtractor) getOneByte() (byte, bool) {
 	for e.bits < 8 {
-		e.extractNextBit()
+		if !e.extractNextBit() {
+			return 0, false
+		}
 	}
 	b := e.byteBuf
 	e.bits = 0
 	e.byteBuf = 0
-	return b
+	return b, true
 }
 
-func (e *LSBExtractor) getNextNBytes(n int) []byte {
-	bytesList := make([]byte, n)
-	for i := 0; i < n; i++ {
-		bytesList[i] = e.getOneByte()
+func (e *LSBExtractor) Read(p []byte) (int, error) {
+	n := 0
+	for n < len(p) {
+		b, ok := e.getOneByte()
+		if !ok {
+			if n == 0 {
+				return 0, io.EOF
+			}
+			break
+		}
+		p[n] = b
+		n++
 	}
-	return bytesList
-}
-
-func (e *LSBExtractor) read32BitInteger() int {
-	bytesList := e.getNextNBytes(4)
-	return int(binary.BigEndian.Uint32(bytesList))
+	return n, nil
 }
 
 func ExtractFromBytes(r io.Reader) (*Metadata, error) {
@@ -81,13 +88,27 @@ func ExtractFromBytes(r io.Reader) (*Metadata, error) {
 func ExtractMetadata(img image.Image) (*Metadata, error) {
 	extractor := NewLSBExtractor(img)
 	magic := "stealth_pngcomp"
-	readMagic := string(extractor.getNextNBytes(len(magic)))
-	if magic != readMagic {
+	magicBytes := make([]byte, len(magic))
+	_, err := io.ReadFull(extractor, magicBytes)
+	if err != nil {
+		return nil, err
+	}
+	if magic != string(magicBytes) {
 		return nil, fmt.Errorf("magic number mismatch")
 	}
 
-	readLen := extractor.read32BitInteger() / 8
-	jsonData := extractor.getNextNBytes(readLen)
+	lenBytes := make([]byte, 4)
+	_, err = io.ReadFull(extractor, lenBytes)
+	if err != nil {
+		return nil, err
+	}
+	readLen := int(binary.BigEndian.Uint32(lenBytes)) / 8
+
+	jsonData := make([]byte, readLen)
+	_, err = io.ReadFull(extractor, jsonData)
+	if err != nil {
+		return nil, err
+	}
 
 	reader, err := gzip.NewReader(bytes.NewReader(jsonData))
 	if err != nil {
