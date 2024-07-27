@@ -1,6 +1,7 @@
 package meta
 
 import (
+	"bytes"
 	"compress/gzip"
 	"encoding/binary"
 	"encoding/json"
@@ -8,7 +9,6 @@ import (
 	"image"
 	_ "image/png"
 	"io"
-	"strings"
 )
 
 type LSBExtractor struct {
@@ -70,12 +70,15 @@ func (e *LSBExtractor) read32BitInteger() int {
 	return int(binary.BigEndian.Uint32(bytesList))
 }
 
-func ExtractMetadata(r io.Reader) (*Metadata, error) {
+func ExtractFromBytes(r io.Reader) (*Metadata, error) {
 	img, _, err := image.Decode(r)
 	if err != nil {
 		return nil, err
 	}
+	return ExtractMetadata(img)
+}
 
+func ExtractMetadata(img image.Image) (*Metadata, error) {
 	extractor := NewLSBExtractor(img)
 	magic := "stealth_pngcomp"
 	readMagic := string(extractor.getNextNBytes(len(magic)))
@@ -86,7 +89,7 @@ func ExtractMetadata(r io.Reader) (*Metadata, error) {
 	readLen := extractor.read32BitInteger() / 8
 	jsonData := extractor.getNextNBytes(readLen)
 
-	reader, err := gzip.NewReader(strings.NewReader(string(jsonData)))
+	reader, err := gzip.NewReader(bytes.NewReader(jsonData))
 	if err != nil {
 		return nil, err
 	}

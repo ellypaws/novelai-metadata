@@ -95,12 +95,12 @@ func processFile(filePath string) (*meta.Metadata, error) {
 	}
 	defer imgFile.Close()
 
-	data, err := meta.ExtractMetadata(imgFile)
+	data, err := meta.ExtractFromBytes(imgFile)
 	if err != nil {
 		return nil, fmt.Errorf("failed to extract metadata from file: %w", err)
 	}
 
-	valid, err := meta.IsNovelAI(*data)
+	valid, err := data.IsNovelAI()
 	if err != nil {
 		return nil, fmt.Errorf("failed to verify metadata for file: %w", err)
 	}

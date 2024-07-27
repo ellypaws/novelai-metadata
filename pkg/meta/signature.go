@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"crypto/ed25519"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"image"
 	"strings"
@@ -11,7 +12,7 @@ import (
 
 const VerifyKeyHex = "Y2JcQAOhLwzwSDUJPNgL04nS0Tbqm7cSRc4xk0vRMic="
 
-func IsNovelAI(metadata Metadata) (bool, error) {
+func (metadata *Metadata) IsNovelAI() (bool, error) {
 	if metadata.Comment == nil {
 		return false, nil
 	}
@@ -21,7 +22,7 @@ func IsNovelAI(metadata Metadata) (bool, error) {
 	}
 
 	if metadata.raw == nil {
-		return false, fmt.Errorf("raw is nil")
+		return false, errors.New("raw is nil")
 	}
 
 	signedHash, err := base64.StdEncoding.DecodeString(*metadata.Comment.SignedHash)
@@ -34,18 +35,13 @@ func IsNovelAI(metadata Metadata) (bool, error) {
 		return false, fmt.Errorf("failed to decode verify key: %w", err)
 	}
 
-	var imageAndComment bytes.Buffer
-	imageAndComment.Write(rgbaImageBytes(metadata.raw.image.(*image.NRGBA)))
-
 	removeSignedHashField(metadata.raw.comment)
 
-	buf := bytes.Buffer{}
-	imageBytes := rgbaImageBytes(metadata.raw.image.(*image.NRGBA))
+	bin := rgbaImageBytes(metadata.raw.image.(*image.NRGBA))
+	bin.Grow(len(*metadata.raw.comment))
+	bin.Write([]byte(*metadata.raw.comment))
 
-	buf.Write(imageBytes)
-	buf.Write([]byte(*metadata.raw.comment))
-
-	if !ed25519.Verify(verifyKey, buf.Bytes(), signedHash) {
+	if !ed25519.Verify(verifyKey, bin.Bytes(), signedHash) {
 		return false, nil
 	}
 
@@ -62,14 +58,17 @@ func removeSignedHashField(comment *string) {
 	*comment = *comment + `}`
 }
 
-func rgbaImageBytes(rgbaImg *image.NRGBA) []byte {
-	rgbBytes := make([]byte, 0, 3*rgbaImg.Rect.Dx()*rgbaImg.Rect.Dy())
+func rgbaImageBytes(rgbaImg *image.NRGBA) *bytes.Buffer {
+	var bin bytes.Buffer
+	bin.Grow(3 * rgbaImg.Rect.Dx() * rgbaImg.Rect.Dy())
+
 	for y := rgbaImg.Rect.Min.Y; y < rgbaImg.Rect.Max.Y; y++ {
 		for x := rgbaImg.Rect.Min.X; x < rgbaImg.Rect.Max.X; x++ {
 			stride := (y-rgbaImg.Rect.Min.Y)*rgbaImg.Stride + (x-rgbaImg.Rect.Min.X)*4
 			pix := rgbaImg.Pix[stride : stride+4]
-			rgbBytes = append(rgbBytes, pix[0], pix[1], pix[2])
+			bin.Write(pix[:3])
 		}
 	}
-	return rgbBytes
+
+	return &bin
 }
