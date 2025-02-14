@@ -6,15 +6,16 @@ import (
 )
 
 func main() {
-	paths := getPathsFromArgsOrPrompt()
+	args, processor := getPathsFromArgsOrPrompt()
 
 	now := time.Now()
-	for _, p := range paths {
+	for _, p := range args {
 		log.Printf("Processing path: %s", p)
-		_, err := processPath(p, saveCaption)
+		_, err := processPath(p, processor)
 		if err != nil {
 			log.Printf("Failed to process path %s: %v", p, err)
 		}
 	}
+
 	log.Printf("Finished processing in %v", time.Since(now))
 }

@@ -14,19 +14,33 @@ import (
 	"github.com/ellypaws/novelai-metadata/pkg/meta"
 )
 
-func getPathsFromArgsOrPrompt() []string {
-	if len(os.Args) < 2 {
-		reader := bufio.NewReader(os.Stdin)
-		fmt.Print("Enter image files or directories separated by space: ")
-		input, _ := reader.ReadString('\n')
-		args := strings.Fields(input)
-		if len(args) == 0 {
-			fmt.Println("No input provided. Exiting.")
-			os.Exit(1)
-		}
-		return args
+func getPathsFromArgsOrPrompt() ([]string, save) {
+	if len(os.Args) >= 2 {
+		return getProcessor(os.Args[1:])
 	}
-	return os.Args[1:]
+	reader := bufio.NewReader(os.Stdin)
+	fmt.Print("Enter image files or directories separated by space: ")
+	input, _ := reader.ReadString('\n')
+	args := strings.Fields(input)
+	if len(args) == 0 {
+		fmt.Println("No input provided. Exiting.")
+		os.Exit(1)
+	}
+	return getProcessor(args)
+}
+
+func getProcessor(s []string) ([]string, save) {
+	if len(s) == 0 {
+		return nil, nil
+	}
+	switch s[len(s)-1] {
+	case "-json":
+		return s[:len(s)-1], saveJSON
+	case "-caption":
+		return s[:len(s)-1], saveCaption
+	default:
+		return s, saveCaption
+	}
 }
 
 type data struct {
